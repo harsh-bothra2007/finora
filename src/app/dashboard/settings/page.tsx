@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { updateProfile } from "@/lib/supabase/queries";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import SettingsForm from "@/components/SettingsForm";
 
 export default async function SettingsPage() {
@@ -10,6 +10,12 @@ export default async function SettingsPage() {
   if (error || !user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -30,11 +36,14 @@ export default async function SettingsPage() {
 
   // Passwords can't be read back, so start blank.
   return (
-    <SettingsForm
-      userId={user.id}
-      initialProfile={profileData}
-      initialEmail={user.email ?? ""}
-      providers={user.app_metadata?.providers ?? []}
-    />
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Settings" />
+      <SettingsForm
+        userId={user.id}
+        initialProfile={profileData}
+        initialEmail={user.email ?? ""}
+        providers={user.app_metadata?.providers ?? []}
+      />
+    </main>
   );
 }

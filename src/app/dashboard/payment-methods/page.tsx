@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getBudgetPeriodWindow } from "@/lib/supabase/queries";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import PaymentMethodsClient from "@/components/PaymentMethodsClient";
 import type {
   CustomPaymentMethod,
@@ -18,6 +19,12 @@ export default async function PaymentMethodsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   // Fetch custom payment methods, budgets and all transactions in parallel
   const [customMethodsResult, budgetsResult, transactionsResult] =
@@ -92,26 +99,16 @@ export default async function PaymentMethodsPage() {
   }));
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Payment Methods
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Manage your payment methods and analyze spending patterns across
-            different payment types.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Payment Methods" />
 
-        <PaymentMethodsClient
+      <PaymentMethodsClient
           initialCustomMethods={customMethods}
           analytics={analytics}
           budgets={budgets}
           spentByMethod={spentByMethod}
           userId={user.id}
         />
-      </div>
     </main>
   );
 }

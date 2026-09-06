@@ -1,6 +1,7 @@
 "use client";
 
 import type { SavingsGoal } from "@/lib/types/database";
+import EmptyState from "@/components/EmptyState";
 
 interface SavingsOverviewProps {
   goals: SavingsGoal[];
@@ -39,11 +40,13 @@ export default function SavingsOverview({ goals }: SavingsOverviewProps) {
       </div>
 
       {goals.length === 0 ? (
-        <div className="py-8 text-center">
-          <p className="text-sm text-slate-500">
-            No savings goals yet. Create one to start tracking.
-          </p>
-        </div>
+        <EmptyState
+          title="No savings goals yet"
+          description="Set a target and track your progress toward it."
+          actionHref="/dashboard/savings"
+          actionLabel="Create goal"
+          compact
+        />
       ) : (
         goals.slice(0, 3).map((goal) => {
           const pct = Math.min(

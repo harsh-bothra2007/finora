@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import TransactionsClient from "@/components/TransactionsClient";
 import type { TransactionWithCategory, Category, CustomPaymentMethod } from "@/lib/types/database";
 
@@ -13,6 +14,12 @@ export default async function TransactionsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   const [transactionsResult, categoriesResult, customPmResult] = await Promise.all([
     supabase
@@ -34,23 +41,14 @@ export default async function TransactionsPage() {
   ]);
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Transactions
-          </h1>
-          <p className="mt-1 text-slate-600">
-            View and manage all your income and expenses.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Transactions" />
 
-        <TransactionsClient
+      <TransactionsClient
           initialTransactions={(transactionsResult.data as TransactionWithCategory[]) ?? []}
           categories={(categoriesResult.data as Category[]) ?? []}
           customPaymentMethods={(customPmResult.data as CustomPaymentMethod[]) ?? []}
         />
-      </div>
     </main>
   );
 }

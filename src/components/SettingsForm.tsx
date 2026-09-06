@@ -207,12 +207,7 @@ export default function SettingsForm({
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10 pl-64 lg:pl-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Settings</h1>
-        <p className="mt-1 text-slate-600">Manage your account details and security.</p>
-      </div>
-
+    <div className="max-w-2xl space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         {/* Tabs */}
         <div className="mb-6 flex gap-6 border-b border-slate-200">
@@ -405,6 +400,6 @@ export default function SettingsForm({
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

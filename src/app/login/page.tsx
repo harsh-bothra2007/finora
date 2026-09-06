@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type LoginStatus = "idle" | "loading" | "error" | "rate-limited" | "unverified";
@@ -53,6 +53,25 @@ function LoginForm() {
   );
   const [resendCooldown, setResendCooldown] = useState(0);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Strip a stale ?error=auth_callback_error from the URL after reading it,
+  // so reloading (or bfcache restore) can never re-show an old failure.
+  useEffect(() => {
+    if (searchParams.get("error") === "auth_callback_error") {
+      router.replace(window.location.pathname, { scroll: false });
+    }
+  }, [router, searchParams]);
+
+  // Auto-dismiss plain errors so a transient failure never lingers on screen
+  // and gets mistaken for a broken login flow.
+  useEffect(() => {
+    if (status !== "error") return;
+    const t = setTimeout(() => {
+      setStatus("idle");
+      setMessage("");
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [status]);
 
   function startResendCooldown() {
     setResendCooldown(60);

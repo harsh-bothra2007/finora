@@ -1,4 +1,4 @@
-import Sidebar from "@/components/Sidebar";
+import DashboardShell from "@/components/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
@@ -25,9 +25,8 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
-      <Sidebar userName={userName} userEmail={userEmail} />
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
-    </div>
+    <DashboardShell userName={userName} userEmail={userEmail}>
+      {children}
+    </DashboardShell>
   );
 }

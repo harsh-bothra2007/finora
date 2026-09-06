@@ -7,6 +7,7 @@ import type {
   CustomPaymentMethod,
 } from "@/lib/types/database";
 import { resolvePaymentMethod } from "@/lib/types/database";
+import EmptyState from "@/components/EmptyState";
 
 interface DashboardClientProps {
   initialTransactions: TransactionWithCategory[];
@@ -88,13 +89,21 @@ export default function DashboardClient({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="px-4 py-12 text-center">
-          <p className="text-sm text-slate-500">
-            {initialTransactions.length === 0
-              ? "No transactions yet. Click \"Add Transaction\" to get started."
-              : "No transactions match this filter."}
-          </p>
-        </div>
+        initialTransactions.length === 0 ? (
+          <EmptyState
+            compact
+            title="No transactions yet"
+            description="Add your first income or expense to see it here."
+            actionHref="/dashboard/transactions"
+            actionLabel="Add transaction"
+          />
+        ) : (
+          <EmptyState
+            title="No transactions match this filter"
+            description="Try switching to a different tab."
+            compact
+          />
+        )
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">

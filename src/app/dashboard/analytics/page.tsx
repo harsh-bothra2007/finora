@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import AnalyticsClient from "@/components/AnalyticsClient";
 import type { TransactionWithCategory, Category, CustomPaymentMethod } from "@/lib/types/database";
 
@@ -13,6 +14,12 @@ export default async function AnalyticsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   // Fetch all transactions (last 2 years for robust analytics) and categories
   const twoYearsAgo = new Date(
@@ -45,25 +52,14 @@ export default async function AnalyticsPage() {
   const categories: Category[] = (categoriesResult.data as Category[]) ?? [];
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        {/* Page header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Analytics
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Deep dive into your financial data. Analyze spending patterns, track
-            trends, and compare periods.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Analytics" />
 
-        <AnalyticsClient
+      <AnalyticsClient
           transactions={transactions}
           categories={categories}
           customPaymentMethods={(customPmResult.data as CustomPaymentMethod[]) ?? []}
         />
-      </div>
     </main>
   );
 }

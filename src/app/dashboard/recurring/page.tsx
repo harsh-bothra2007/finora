@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import RecurringTemplatesClient from "@/components/RecurringTemplatesClient";
 import type {
   RecurringTemplateWithCategory,
@@ -17,6 +18,12 @@ export default async function RecurringPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   const [templatesResult, categoriesResult, customPmResult] = await Promise.all([
     supabase
@@ -41,26 +48,15 @@ export default async function RecurringPage() {
   const categories: Category[] = categoriesResult.data ?? [];
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        {/* Page header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Recurring Transactions
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Automate your recurring income and expenses. Transactions are
-            generated automatically based on your schedules.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Recurring" />
 
-        <RecurringTemplatesClient
+      <RecurringTemplatesClient
           initialTemplates={templates}
           categories={categories}
           userId={user.id}
           customPaymentMethods={(customPmResult.data as CustomPaymentMethod[]) ?? []}
         />
-      </div>
     </main>
   );
 }

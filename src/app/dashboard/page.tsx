@@ -278,7 +278,10 @@ export default async function DashboardPage() {
 
   return (
     <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
-      <DashboardNavbar userName={firstName || userName} />
+      <DashboardNavbar
+        userName={firstName || userName}
+        hasData={transactions.length > 0}
+      />
 
       {/* Welcome & controls */}
       <section className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -362,27 +365,27 @@ export default async function DashboardPage() {
       />
 
       {/* Quick actions */}
-      <section className="flex items-center gap-2 overflow-x-auto pb-0.5 text-xs">
-        <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+      <section className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+        <span className="mr-0.5 flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Quick Actions:
         </span>
         <a
           href="/dashboard/transactions"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           + Add Income
         </a>
         <a
           href="/dashboard/transactions"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
           - Add Expense
         </a>
         <a
           href="/dashboard/budgets"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
@@ -391,7 +394,7 @@ export default async function DashboardPage() {
         </a>
         <a
           href="/dashboard/savings"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
@@ -400,7 +403,7 @@ export default async function DashboardPage() {
         </a>
         <a
           href="/dashboard/recurring"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />

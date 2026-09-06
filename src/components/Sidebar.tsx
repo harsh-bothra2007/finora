@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 interface SidebarProps {
   userName?: string;
   userEmail?: string;
+  onNavigate?: () => void;
 }
 
 const mainNav = [
@@ -86,13 +89,27 @@ const manageNav = [
   },
 ];
 
-export default function Sidebar({ userName, userEmail }: SidebarProps) {
+export default function Sidebar({ userName, userEmail, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   function isActive(href: string) {
     return href === "/dashboard"
       ? pathname === "/dashboard"
       : pathname.startsWith(href);
+  }
+
+  function handleNavClick() {
+    onNavigate?.();
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
   }
 
   const name = userName ?? "User";
@@ -104,10 +121,36 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
     .join("")
     .toUpperCase();
 
+  function renderNav(items: typeof mainNav) {
+    return items.map((item) => {
+      const active = isActive(item.href);
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          onClick={handleNavClick}
+          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+            active
+              ? "bg-slate-800 text-white"
+              : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+          }`}
+        >
+          <span className={`h-4 w-4 ${active ? "text-brand-500" : "text-slate-400"}`}>
+            {item.icon}
+          </span>
+          <span>{item.label}</span>
+          {active && (
+            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
+          )}
+        </Link>
+      );
+    });
+  }
+
   return (
-    <aside className="flex w-64 flex-shrink-0 flex-col border-r border-slate-800/80 bg-[#0F172A] text-slate-300 select-none">
+    <aside className="flex h-full w-64 flex-shrink-0 flex-col border-r border-slate-800/80 bg-[#0F172A] text-slate-300 select-none">
       {/* Brand */}
-      <div className="flex h-16 items-center justify-between border-b border-slate-800/80 px-5">
+      <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-800/80 px-5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white shadow-sm">
             F
@@ -129,62 +172,19 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
           <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Main Menu
           </div>
-          <div className="space-y-0.5">
-            {mainNav.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                    active
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-                  }`}
-                >
-                  <span className={`h-4 w-4 ${active ? "text-brand-500" : "text-slate-400"}`}>
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
-                  {active && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
-                  )}
-                </Link>
-              );
-            })}
-          </div>
+          <div className="space-y-0.5">{renderNav(mainNav)}</div>
         </div>
 
         <div>
           <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Management
           </div>
-          <div className="space-y-0.5">
-            {manageNav.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                    active
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-                  }`}
-                >
-                  <span className={`h-4 w-4 ${active ? "text-brand-500" : "text-slate-400"}`}>
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
+          <div className="space-y-0.5">{renderNav(manageNav)}</div>
         </div>
       </nav>
 
       {/* Tip box */}
-      <div className="mx-3 mb-2 rounded-lg border border-slate-800 bg-slate-850/90 p-3">
+      <div className="mx-3 mb-2 hidden flex-shrink-0 rounded-lg border border-slate-800 bg-slate-850/90 p-3 md:block">
         <div className="mb-1 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           <span className="text-[11px] font-semibold text-slate-200">
@@ -196,20 +196,52 @@ export default function Sidebar({ userName, userEmail }: SidebarProps) {
         </p>
       </div>
 
-      {/* User */}
-      <div className="border-t border-slate-800/80 bg-slate-950/50 p-3">
-        <div className="flex items-center justify-between">
-          <Link href="/dashboard/settings" className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200">
-              {initials}
+      {/* User + Settings/Logout */}
+      <div className="flex-shrink-0 border-t border-slate-800/80 bg-slate-950/50 p-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold text-white">{name}</div>
+            <div className="truncate text-[10px] text-slate-400">
+              {email || "Signed in"}
             </div>
-            <div className="min-w-0">
-              <div className="truncate text-xs font-semibold text-white">{name}</div>
-              <div className="truncate text-[10px] text-slate-400">
-                {email || "Signed in"}
-              </div>
-            </div>
+          </div>
+          <Link
+            href="/dashboard/settings"
+            onClick={handleNavClick}
+            title="Settings"
+            aria-label="Settings"
+            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Logout"
+            aria-label="Logout"
+            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-rose-400 disabled:opacity-50"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>

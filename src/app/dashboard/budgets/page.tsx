@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getBudgetPeriodWindow } from "@/lib/supabase/queries";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import BudgetsClient from "@/components/BudgetsClient";
 import type { BudgetWithCategory, Category } from "@/lib/types/database";
 
@@ -14,6 +15,12 @@ export default async function BudgetsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   const [budgetsResult, categoriesResult, transactionsResult] =
     await Promise.all([
@@ -57,24 +64,15 @@ export default async function BudgetsPage() {
   }
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Budgets
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Set spending limits for each category and track your progress.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Budgets" />
 
-        <BudgetsClient
+      <BudgetsClient
           initialBudgets={(budgetsResult.data as BudgetWithCategory[]) ?? []}
           expenseCategories={(categoriesResult.data as Category[]) ?? []}
           spentByCategory={Object.fromEntries(spentByCategory)}
           userId={user.id}
         />
-      </div>
     </main>
   );
 }

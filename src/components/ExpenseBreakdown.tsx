@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import EmptyState from "@/components/EmptyState";
 
 interface ExpenseBreakdownProps {
   expensesByCategory: { name: string; color: string; amount: number }[];
@@ -9,6 +10,9 @@ interface ExpenseBreakdownProps {
 function inr(n: number): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
+
+// Restrained palette: brand indigo for the top slice, then slate shades.
+const PALETTE = ["#4F46E5", "#334155", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0"];
 
 export default function ExpenseBreakdown({
   expensesByCategory,
@@ -21,18 +25,15 @@ export default function ExpenseBreakdown({
     [expensesByCategory]
   );
 
-  const total = useMemo(
-    () => sorted.reduce((s, c) => s + c.amount, 0),
-    [sorted]
-  );
+  const total = useMemo(() => sorted.reduce((s, c) => s + c.amount, 0), [sorted]);
 
-  // Donut: circumference = 2*pi*38 ≈ 238.76
+  // Donut: circumference = 2 * pi * 38 ≈ 238.76
   const CIRC = 2 * Math.PI * 38;
   const segments = useMemo(() => {
     let offset = 0;
-    return sorted.map((cat) => {
+    return sorted.map((cat, idx) => {
       const len = total > 0 ? (cat.amount / total) * CIRC : 0;
-      const seg = { ...cat, len, offset };
+      const seg = { name: cat.name, amount: cat.amount, len, offset, color: PALETTE[idx % PALETTE.length] };
       offset -= len;
       return seg;
     });
@@ -47,15 +48,21 @@ export default function ExpenseBreakdown({
             Categorical distribution this month
           </p>
         </div>
-        <span className="font-mono text-xs font-medium text-slate-700">
-          {inr(total)}
-        </span>
+        {total > 0 && (
+          <span className="font-mono text-xs font-medium tabular-nums text-slate-700">
+            {inr(total)}
+          </span>
+        )}
       </div>
 
-      {sorted.length === 0 ? (
-        <div className="py-10 text-center">
-          <p className="text-sm text-slate-500">No expenses recorded this month.</p>
-        </div>
+      {segments.length === 0 ? (
+        <EmptyState
+          title="No spending this month"
+          description="Expenses you add will be broken down by category here."
+          actionHref="/dashboard/transactions"
+          actionLabel="Add expense"
+          compact
+        />
       ) : (
         <>
           {/* Donut */}
@@ -69,7 +76,7 @@ export default function ExpenseBreakdown({
                 stroke="#F1F5F9"
                 strokeWidth="9"
               />
-              {segments.slice(0, 6).map((seg) => (
+              {segments.map((seg) => (
                 <circle
                   key={seg.name}
                   cx="50"
@@ -89,32 +96,29 @@ export default function ExpenseBreakdown({
               <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
                 Total Spent
               </span>
-              <span className="font-mono text-base font-bold tracking-tight text-slate-900">
+              <span className="font-mono text-base font-bold tracking-tight tabular-nums text-slate-900">
                 {inr(total)}
-              </span>
-              <span className="mt-0.5 text-[10px] font-medium text-emerald-600">
-                This Month
               </span>
             </div>
           </div>
 
           {/* Ranked list */}
           <div className="space-y-2 pt-1">
-            {sorted.slice(0, 6).map((cat) => {
-              const pct = total > 0 ? Math.round((cat.amount / total) * 100) : 0;
+            {segments.slice(0, 6).map((seg) => {
+              const pct = total > 0 ? Math.round((seg.amount / total) * 100) : 0;
               return (
-                <div key={cat.name} className="flex items-center justify-between text-xs">
+                <div key={seg.name} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span
                       className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: cat.color }}
+                      style={{ backgroundColor: seg.color }}
                     />
-                    <span className="font-medium text-slate-700">{cat.name}</span>
+                    <span className="font-medium text-slate-700">{seg.name}</span>
                   </div>
-                  <div className="flex items-center gap-2 font-mono">
+                  <div className="flex items-center gap-2 font-mono tabular-nums">
                     <span className="text-[11px] text-slate-400">{pct}%</span>
                     <span className="font-medium text-slate-900">
-                      {inr(cat.amount)}
+                      {inr(seg.amount)}
                     </span>
                   </div>
                 </div>

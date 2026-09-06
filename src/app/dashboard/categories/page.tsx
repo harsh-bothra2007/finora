@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import CategoriesClient from "@/components/CategoriesClient";
 import type { Category } from "@/lib/types/database";
 
@@ -13,6 +14,12 @@ export default async function CategoriesPage() {
   if (!user) {
     redirect("/login");
   }
+
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
 
   // Fetch categories and all transactions in parallel
   const [categoriesResult, transactionsResult] = await Promise.all([
@@ -63,24 +70,14 @@ export default async function CategoriesPage() {
   }
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Categories
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Manage your income and expense categories. See spending breakdowns
-            at a glance.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Categories" />
 
-        <CategoriesClient
+      <CategoriesClient
           initialCategories={categories}
           spendingByCategory={spendingByCategory}
           userId={user.id}
         />
-      </div>
     </main>
   );
 }

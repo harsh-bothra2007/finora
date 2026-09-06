@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DashboardNavbar from "@/components/DashboardNavbar";
 import SavingsGoalsClient from "@/components/SavingsGoalsClient";
 import type { SavingsGoal } from "@/lib/types/database";
 
@@ -14,6 +15,12 @@ export default async function SavingsPage() {
     redirect("/login");
   }
 
+  const firstName =
+    ((user.user_metadata?.name as string) || "").split(" ")[0] ||
+    (user.user_metadata?.username as string) ||
+    user.email?.split("@")[0] ||
+    "User";
+
   const { data: goals } = await supabase
     .from("savings_goals")
     .select("*")
@@ -21,19 +28,10 @@ export default async function SavingsPage() {
     .order("created_at");
 
   return (
-    <main>
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Savings Goals
-          </h1>
-          <p className="mt-1 text-slate-600">
-            Track your progress towards financial goals.
-          </p>
-        </div>
+    <main className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+      <DashboardNavbar userName={firstName} title="Savings Goals" />
 
-        <SavingsGoalsClient initialGoals={(goals as SavingsGoal[]) ?? []} userId={user.id} />
-      </div>
+      <SavingsGoalsClient initialGoals={(goals as SavingsGoal[]) ?? []} userId={user.id} />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import EmptyState from "@/components/EmptyState";
 
 type Period = "weekly" | "monthly" | "yearly";
 
@@ -33,6 +34,7 @@ export default function MonthlyChart({ data }: MonthlyChartProps) {
 
   const totalIncome = data.reduce((s, d) => s + d.income, 0);
   const totalExpenses = data.reduce((s, d) => s + d.expenses, 0);
+  const hasData = data.some((d) => d.income > 0 || d.expenses > 0);
   const avgIncome = data.length ? totalIncome / data.length : 0;
   const avgExpenses = data.length ? totalExpenses / data.length : 0;
   const avgNet = avgIncome - avgExpenses;
@@ -77,6 +79,18 @@ export default function MonthlyChart({ data }: MonthlyChartProps) {
         </div>
       </div>
 
+      {!hasData && (
+        <EmptyState
+          compact
+          title="No chart data yet"
+          description="Add your first income or expense — your 6-month trend will appear here automatically."
+          actionHref="/dashboard/transactions"
+          actionLabel="Add transaction"
+        />
+      )}
+
+      {hasData && (
+        <>
       {/* Run-rate benchmarks */}
       <div className="my-2 grid grid-cols-3 gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-3 text-center">
         <div>
@@ -199,6 +213,8 @@ export default function MonthlyChart({ data }: MonthlyChartProps) {
             </span>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
