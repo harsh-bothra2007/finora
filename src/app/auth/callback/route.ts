@@ -5,7 +5,14 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+  const type = searchParams.get("type");
 
+  // Handle password recovery flow — redirect to reset-password page
+  if (type === "recovery") {
+    return NextResponse.redirect(`${origin}/reset-password`);
+  }
+
+  // Handle email verification / magic link code exchange
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -14,6 +21,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Return the user to an error page with instructions
+  // Something went wrong
   return NextResponse.redirect(`${origin}/login?error=auth_callback_error`);
 }

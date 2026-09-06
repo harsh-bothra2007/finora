@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { Category, PaymentMethod, CustomPaymentMethod } from "@/lib/types/database";
+import type { Category, PaymentMethod, TransactionWithCategory, CustomPaymentMethod } from "@/lib/types/database";
 import { PAYMENT_METHODS } from "@/lib/types/database";
 
-interface AddTransactionModalProps {
+interface EditTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: {
+  onSubmit: (id: string, data: {
     name: string;
     amount: number;
     type: "income" | "expense";
@@ -16,26 +16,46 @@ interface AddTransactionModalProps {
     date: string;
     notes: string;
   }) => Promise<void>;
+  transaction: TransactionWithCategory | null;
   categories: Category[];
   customPaymentMethods?: CustomPaymentMethod[];
 }
 
-export default function AddTransactionModal({
+export default function EditTransactionModal({
   isOpen,
   onClose,
   onSubmit,
+  transaction,
   categories,
   customPaymentMethods = [],
-}: AddTransactionModalProps) {
+}: EditTransactionModalProps) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Pre-fill the form when the transaction being edited changes
+  // (adjusting state during render — the recommended alternative to
+  // syncing props into state with an effect)
+  const [prevTransaction, setPrevTransaction] = useState(transaction);
+  if (transaction !== prevTransaction) {
+    setPrevTransaction(transaction);
+    if (transaction) {
+      setType(transaction.type);
+      setName(transaction.name);
+      setAmount(String(transaction.amount));
+      setCategoryId(transaction.category_id ?? "");
+      setPaymentMethod(transaction.payment_method);
+      setDate(transaction.date);
+      setNotes(transaction.notes);
+      setError("");
+    }
+  }
 
   const filteredCategories = categories.filter((c) => c.type === type);
 
@@ -52,10 +72,11 @@ export default function AddTransactionModal({
       setError("Please enter a valid amount.");
       return;
     }
+    if (!transaction) return;
 
     setLoading(true);
     try {
-      await onSubmit({
+      await onSubmit(transaction.id, {
         name: name.trim(),
         amount: parsedAmount,
         type,
@@ -64,13 +85,6 @@ export default function AddTransactionModal({
         date,
         notes: notes.trim(),
       });
-      // Reset form
-      setName("");
-      setAmount("");
-      setCategoryId("");
-      setPaymentMethod("upi");
-      setDate(new Date().toISOString().slice(0, 10));
-      setNotes("");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -79,40 +93,26 @@ export default function AddTransactionModal({
     }
   }
 
-  if (!isOpen) return null;
+  if (!isOpen || !transaction) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 transition-opacity"
         onClick={onClose}
       />
-
-      {/* Modal */}
       <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-950">
-            Add Transaction
+            Edit Transaction
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -122,10 +122,7 @@ export default function AddTransactionModal({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => {
-                setType("expense");
-                setCategoryId("");
-              }}
+              onClick={() => { setType("expense"); setCategoryId(""); }}
               className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                 type === "expense"
                   ? "bg-red-50 text-red-700 ring-1 ring-red-200"
@@ -136,10 +133,7 @@ export default function AddTransactionModal({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setType("income");
-                setCategoryId("");
-              }}
+              onClick={() => { setType("income"); setCategoryId(""); }}
               className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
                 type === "income"
                   ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
@@ -152,14 +146,9 @@ export default function AddTransactionModal({
 
           {/* Name */}
           <div>
-            <label
-              htmlFor="tx-name"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Name
-            </label>
+            <label htmlFor="edit-tx-name" className="mb-2 block text-sm font-medium text-slate-700">Name</label>
             <input
-              id="tx-name"
+              id="edit-tx-name"
               type="text"
               placeholder="e.g. Groceries, Salary"
               value={name}
@@ -171,14 +160,9 @@ export default function AddTransactionModal({
 
           {/* Amount */}
           <div>
-            <label
-              htmlFor="tx-amount"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Amount (₹)
-            </label>
+            <label htmlFor="edit-tx-amount" className="mb-2 block text-sm font-medium text-slate-700">Amount (₹)</label>
             <input
-              id="tx-amount"
+              id="edit-tx-amount"
               type="number"
               step="0.01"
               min="0.01"
@@ -192,9 +176,7 @@ export default function AddTransactionModal({
 
           {/* Payment Method */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              Payment Method
-            </label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Payment Method</label>
             <div className="grid grid-cols-4 gap-2">
               {PAYMENT_METHODS.map((pm) => (
                 <button
@@ -222,7 +204,7 @@ export default function AddTransactionModal({
                       paymentMethod === pmValue
                         ? "bg-slate-900 text-white"
                         : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                    }`}
+                  }`}
                   >
                     <span className="text-base">{cm.icon}</span>
                     <span className="truncate w-full text-center text-[10px] leading-tight">{cm.name}</span>
@@ -234,37 +216,25 @@ export default function AddTransactionModal({
 
           {/* Category */}
           <div>
-            <label
-              htmlFor="tx-category"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Category
-            </label>
+            <label htmlFor="edit-tx-category" className="mb-2 block text-sm font-medium text-slate-700">Category</label>
             <select
-              id="tx-category"
+              id="edit-tx-category"
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-900"
             >
               <option value="">Select category</option>
               {filteredCategories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
 
           {/* Date */}
           <div>
-            <label
-              htmlFor="tx-date"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Date
-            </label>
+            <label htmlFor="edit-tx-date" className="mb-2 block text-sm font-medium text-slate-700">Date</label>
             <input
-              id="tx-date"
+              id="edit-tx-date"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -275,15 +245,11 @@ export default function AddTransactionModal({
 
           {/* Notes */}
           <div>
-            <label
-              htmlFor="tx-notes"
-              className="mb-2 block text-sm font-medium text-slate-700"
-            >
-              Notes{" "}
-              <span className="font-normal text-slate-400">(optional)</span>
+            <label htmlFor="edit-tx-notes" className="mb-2 block text-sm font-medium text-slate-700">
+              Notes <span className="font-normal text-slate-400">(optional)</span>
             </label>
             <textarea
-              id="tx-notes"
+              id="edit-tx-notes"
               placeholder="Any additional details..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -292,14 +258,12 @@ export default function AddTransactionModal({
             />
           </div>
 
-          {/* Error */}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {error}
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -313,7 +277,7 @@ export default function AddTransactionModal({
               disabled={loading}
               className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Adding..." : "Add Transaction"}
+              {loading ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>

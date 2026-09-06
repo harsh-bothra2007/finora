@@ -4,10 +4,64 @@ import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { SavingsGoal } from "@/lib/types/database";
 
+type GoalStatus = "on-track" | "at-risk" | "overdue" | "completed";
+
+interface GoalWithStats extends SavingsGoal {
+  remaining: number;
+  percentage: number;
+  requiredPerMonth: number;
+  monthsLeft: number;
+  status: GoalStatus;
+  daysLeft: number;
+}
+
 interface SavingsGoalsClientProps {
   initialGoals: SavingsGoal[];
   userId: string;
 }
+
+function getStatus(
+  percentage: number,
+  deadline: string | null
+): GoalStatus {
+  if (percentage >= 100) return "completed";
+  if (!deadline) return "on-track";
+  const daysLeft =
+    (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  if (daysLeft < 0) return "overdue";
+  if (daysLeft < 30 && percentage < 80) return "at-risk";
+  return "on-track";
+}
+
+const STATUS_CONFIG: Record<
+  GoalStatus,
+  { label: string; color: string; bg: string; ring: string }
+> = {
+  "on-track": {
+    label: "On Track",
+    color: "text-emerald-700",
+    bg: "bg-emerald-50",
+    ring: "ring-emerald-200",
+  },
+  "at-risk": {
+    label: "At Risk",
+    color: "text-amber-700",
+    bg: "bg-amber-50",
+    ring: "ring-amber-200",
+  },
+  overdue: {
+    label: "Overdue",
+    color: "text-red-700",
+    bg: "bg-red-50",
+    ring: "ring-red-200",
+  },
+  completed: {
+    label: "Completed",
+    color: "text-emerald-700",
+    bg: "bg-emerald-50",
+    ring: "ring-emerald-200",
+  },
+};
 
 export default function SavingsGoalsClient({
   initialGoals,
@@ -20,13 +74,17 @@ export default function SavingsGoalsClient({
   const [targetAmount, setTargetAmount] = useState("");
   const [currentAmount, setCurrentAmount] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [icon, setIcon] = useState("🎯");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [addingToId, setAddingToId] = useState<string | null>(null);
   const [addAmount, setAddAmount] = useState("");
+  const [filter, setFilter] = useState<"all" | GoalStatus>("all");
+  const [showCompleted, setShowCompleted] = useState(true);
 
-  // Calculate required monthly savings for each goal
-  const goalsWithStats = useMemo(() => {
+  const GOAL_ICONS = ["🎯", "🏠", "🚗", "✈️", "💻", "📱", "🎓", "💍", "🏖️", "💎", "📊", "🎓"];
+
+  const goalsWithStats = useMemo<GoalWithStats[]>(() => {
     return goals.map((goal) => {
       const remaining = goal.target_amount - goal.current_amount;
       const percentage = Math.min(
@@ -36,17 +94,19 @@ export default function SavingsGoalsClient({
 
       let requiredPerMonth = 0;
       let monthsLeft = 0;
+      let daysLeft = 0;
       if (goal.deadline && remaining > 0) {
         const now = new Date();
         const target = new Date(goal.deadline);
-        monthsLeft = Math.max(
-          1,
-          Math.ceil(
-            (target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30)
-          )
+        daysLeft = Math.max(
+          0,
+          Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         );
+        monthsLeft = Math.max(1, Math.ceil(daysLeft / 30));
         requiredPerMonth = remaining / monthsLeft;
       }
+
+      const status = getStatus(percentage, goal.deadline);
 
       return {
         ...goal,
@@ -54,15 +114,41 @@ export default function SavingsGoalsClient({
         percentage,
         requiredPerMonth,
         monthsLeft,
+        status,
+        daysLeft,
       };
     });
   }, [goals]);
+
+  const filteredGoals = useMemo(() => {
+    if (filter === "all") {
+      return showCompleted
+        ? goalsWithStats
+        : goalsWithStats.filter((g) => g.status !== "completed");
+    }
+    return goalsWithStats.filter((g) => g.status === filter);
+  }, [goalsWithStats, filter, showCompleted]);
+
+  const stats = useMemo(() => {
+    const completed = goalsWithStats.filter((g) => g.status === "completed").length;
+    const onTrack = goalsWithStats.filter((g) => g.status === "on-track").length;
+    const atRisk = goalsWithStats.filter(
+      (g) => g.status === "at-risk" || g.status === "overdue"
+    ).length;
+    const totalSaved = goals.reduce((sum, g) => sum + g.current_amount, 0);
+    const totalTarget = goals.reduce((sum, g) => sum + g.target_amount, 0);
+    const monthlyNeeded = goalsWithStats
+      .filter((g) => g.status !== "completed" && g.requiredPerMonth > 0)
+      .reduce((sum, g) => sum + g.requiredPerMonth, 0);
+    return { completed, onTrack, atRisk, totalSaved, totalTarget, monthlyNeeded };
+  }, [goals, goalsWithStats]);
 
   function resetForm() {
     setName("");
     setTargetAmount("");
     setCurrentAmount("");
     setDeadline("");
+    setIcon("🎯");
     setEditingId(null);
     setError("");
     setShowForm(false);
@@ -74,6 +160,7 @@ export default function SavingsGoalsClient({
     setTargetAmount(String(goal.target_amount));
     setCurrentAmount(String(goal.current_amount));
     setDeadline(goal.deadline || "");
+    setIcon(goal.icon || "🎯");
     setShowForm(true);
   }
 
@@ -104,6 +191,7 @@ export default function SavingsGoalsClient({
             target_amount: target,
             current_amount: current,
             deadline: deadline || null,
+            icon,
           })
           .eq("id", editingId)
           .select()
@@ -122,6 +210,7 @@ export default function SavingsGoalsClient({
             target_amount: target,
             current_amount: current,
             deadline: deadline || null,
+            icon,
           })
           .select()
           .single();
@@ -171,41 +260,86 @@ export default function SavingsGoalsClient({
     setAddAmount("");
   }
 
-  const totalSaved = goals.reduce((sum, g) => sum + g.current_amount, 0);
-  const totalTarget = goals.reduce((sum, g) => sum + g.target_amount, 0);
-
   return (
     <>
       {/* Summary card */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
           <div>
             <p className="text-sm text-slate-500">Total Saved</p>
             <p className="mt-1 text-3xl font-bold text-slate-950">
-              ₹{totalSaved.toLocaleString("en-IN")}
+              ₹{stats.totalSaved.toLocaleString("en-IN")}
             </p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Total Target</p>
             <p className="mt-1 text-3xl font-bold text-slate-950">
-              ₹{totalTarget.toLocaleString("en-IN")}
+              ₹{stats.totalTarget.toLocaleString("en-IN")}
             </p>
           </div>
           <div>
             <p className="text-sm text-slate-500">Overall Progress</p>
             <p className="mt-1 text-3xl font-bold text-emerald-600">
-              {totalTarget > 0
-                ? Math.round((totalSaved / totalTarget) * 100)
+              {stats.totalTarget > 0
+                ? Math.round((stats.totalSaved / stats.totalTarget) * 100)
                 : 0}
               %
             </p>
           </div>
+          <div>
+            <p className="text-sm text-slate-500">Monthly Needed</p>
+            <p className="mt-1 text-3xl font-bold text-slate-950">
+              ₹{Math.round(stats.monthlyNeeded).toLocaleString("en-IN")}
+            </p>
+            <p className="text-xs text-slate-400">across active goals</p>
+          </div>
+        </div>
+
+        {/* Status summary pills */}
+        <div className="mt-4 flex flex-wrap gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            ✓ {stats.completed} completed
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+            → {stats.onTrack} on track
+          </span>
+          {stats.atRisk > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+              ⚠ {stats.atRisk} at risk
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Header */}
-      <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-950">Your Goals</h2>
+      {/* Header + filter */}
+      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {(["all", "on-track", "at-risk", "completed"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition ${
+                filter === f
+                  ? "bg-slate-900 text-white"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {f === "at-risk" ? "⚠️ At Risk" : f === "on-track" ? "✓ On Track" : f === "completed" ? "🎉 Completed" : "All Goals"}
+            </button>
+          ))}
+          {filter === "all" && (
+            <label className="ml-2 flex items-center gap-1.5 text-xs text-slate-500">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(e) => setShowCompleted(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              Show completed
+            </label>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -239,6 +373,27 @@ export default function SavingsGoalsClient({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Icon picker */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Icon</label>
+                <div className="flex flex-wrap gap-2">
+                  {GOAL_ICONS.map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setIcon(i)}
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg text-lg transition ${
+                        icon === i
+                          ? "bg-slate-900 text-white ring-2 ring-slate-900"
+                          : "bg-slate-100 hover:bg-slate-200"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Goal Name</label>
                 <input
@@ -297,6 +452,7 @@ export default function SavingsGoalsClient({
                         Math.max(
                           1,
                           Math.ceil(
+                            // eslint-disable-next-line react-hooks/purity -- live preview of months until deadline
                             (new Date(deadline).getTime() - Date.now()) /
                               (1000 * 60 * 60 * 24 * 30)
                           )
@@ -306,6 +462,21 @@ export default function SavingsGoalsClient({
                     / month to reach this goal
                   </p>
                 )}
+              </div>
+
+              {/* Preview */}
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-xs text-slate-500 mb-2">Preview</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{icon}</span>
+                  <div>
+                    <p className="font-medium text-slate-950">{name || "Goal Name"}</p>
+                    <p className="text-xs text-slate-500">
+                      ₹{(parseFloat(currentAmount) || 0).toLocaleString("en-IN")} / ₹
+                      {(parseFloat(targetAmount) || 0).toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {error && (
@@ -381,112 +552,156 @@ export default function SavingsGoalsClient({
       )}
 
       {/* Goals grid */}
-      {goals.length === 0 ? (
+      {filteredGoals.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white py-12 text-center">
           <p className="text-sm text-slate-500">
-            No savings goals yet. Create one to start tracking your progress.
+            {goals.length === 0
+              ? "No savings goals yet. Create one to start tracking your progress."
+              : "No goals match this filter."}
           </p>
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {goalsWithStats.map((goal) => (
-            <div
-              key={goal.id}
-              className="rounded-2xl border border-slate-200 bg-white p-6 transition hover:shadow-md"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-950">
-                    {goal.name}
-                  </h3>
-                  {goal.deadline && (
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      Target: {new Date(goal.deadline).toLocaleDateString("en-IN", {
+          {filteredGoals.map((goal) => {
+            const cfg = STATUS_CONFIG[goal.status];
+            const isCompleted = goal.status === "completed";
+
+            return (
+              <div
+                key={goal.id}
+                className={`rounded-2xl border bg-white p-6 transition hover:shadow-md ${
+                  isCompleted ? "border-emerald-200 opacity-80" : "border-slate-200"
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{goal.icon || "🎯"}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-950">
+                        {goal.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {/* Status badge */}
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${cfg.color} ${cfg.bg} ${cfg.ring}`}
+                        >
+                          {cfg.label}
+                        </span>
+                        {goal.deadline && (
+                          <span className="text-xs text-slate-400">
+                            {goal.daysLeft > 0
+                              ? `${goal.daysLeft} days left`
+                              : goal.daysLeft === 0
+                                ? "Due today"
+                                : `${Math.abs(goal.daysLeft)} days overdue`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(goal)}
+                      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                      title="Edit"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(goal.id)}
+                      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                      title="Delete"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="mt-4">
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span className="text-slate-600">
+                      ₹{goal.current_amount.toLocaleString("en-IN")} saved
+                    </span>
+                    <span className="text-slate-500">
+                      ₹{goal.target_amount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isCompleted
+                          ? "bg-emerald-500"
+                          : goal.status === "at-risk"
+                            ? "bg-amber-500"
+                            : goal.status === "overdue"
+                              ? "bg-red-500"
+                              : "bg-slate-900"
+                      }`}
+                      style={{ width: `${goal.percentage}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-slate-400">{goal.percentage}% complete</p>
+                    {goal.requiredPerMonth > 0 && !isCompleted && (
+                      <p className="text-xs text-slate-500">
+                        ₹{goal.requiredPerMonth.toLocaleString("en-IN", { maximumFractionDigits: 0 })}/mo needed
+                        {goal.monthsLeft > 0 && ` (${goal.monthsLeft}mo left)`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Details */}
+                {goal.deadline && (
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+                    <span>
+                      Deadline:{" "}
+                      {new Date(goal.deadline).toLocaleDateString("en-IN", {
                         day: "numeric",
                         month: "short",
                         year: "numeric",
                       })}
+                    </span>
+                    <span>
+                      Remaining: ₹{goal.remaining.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
+
+                {/* Actions */}
+                {isCompleted ? (
+                  <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-center">
+                    <p className="text-lg">🎉</p>
+                    <p className="mt-1 text-sm font-semibold text-emerald-700">
+                      Goal completed! Congratulations!
                     </p>
-                  )}
-                </div>
-                <div className="flex gap-1">
+                    <p className="text-xs text-emerald-600">
+                      You saved ₹{goal.target_amount.toLocaleString("en-IN")} for {goal.name}
+                    </p>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => startEdit(goal)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                    title="Edit"
+                    onClick={() => {
+                      setAddingToId(goal.id);
+                      setAddAmount("");
+                    }}
+                    className="mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                    </svg>
+                    + Add Money
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(goal.id)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
-                    title="Delete"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                    </svg>
-                  </button>
-                </div>
+                )}
               </div>
-
-              {/* Progress bar */}
-              <div className="mt-4">
-                <div className="mb-2 flex justify-between text-sm">
-                  <span className="text-slate-600">
-                    ₹{goal.current_amount.toLocaleString("en-IN")} saved
-                  </span>
-                  <span className="text-slate-500">
-                    ₹{goal.target_amount.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      goal.percentage >= 100
-                        ? "bg-emerald-500"
-                        : goal.percentage >= 50
-                          ? "bg-slate-900"
-                          : "bg-slate-600"
-                    }`}
-                    style={{ width: `${goal.percentage}%` }}
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-xs text-slate-400">{goal.percentage}% complete</p>
-                  {goal.requiredPerMonth > 0 && goal.percentage < 100 && (
-                    <p className="text-xs text-slate-500">
-                      ₹{goal.requiredPerMonth.toLocaleString("en-IN", { maximumFractionDigits: 0 })}/mo needed
-                      {" "}({goal.monthsLeft} months left)
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Add money button */}
-              {goal.percentage < 100 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddingToId(goal.id);
-                    setAddAmount("");
-                  }}
-                  className="mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
-                  + Add Money
-                </button>
-              )}
-
-              {goal.percentage >= 100 && (
-                <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-center text-sm font-medium text-emerald-700">
-                  🎉 Goal reached!
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

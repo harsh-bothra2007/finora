@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import TransactionsClient from "@/components/TransactionsClient";
-import type { TransactionWithCategory, Category, CustomPaymentMethod } from "@/lib/types/database";
+import RecurringTemplatesClient from "@/components/RecurringTemplatesClient";
+import type {
+  RecurringTemplateWithCategory,
+  Category,
+  CustomPaymentMethod,
+} from "@/lib/types/database";
 
-export default async function TransactionsPage() {
+export default async function RecurringPage() {
   const supabase = await createClient();
 
   const {
@@ -14,13 +18,12 @@ export default async function TransactionsPage() {
     redirect("/login");
   }
 
-  const [transactionsResult, categoriesResult, customPmResult] = await Promise.all([
+  const [templatesResult, categoriesResult, customPmResult] = await Promise.all([
     supabase
-      .from("transactions")
+      .from("recurring_templates")
       .select("*, categories(name, icon, color)")
       .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(200),
+      .order("next_date"),
     supabase
       .from("categories")
       .select("*")
@@ -33,21 +36,28 @@ export default async function TransactionsPage() {
       .order("name"),
   ]);
 
+  const templates: RecurringTemplateWithCategory[] =
+    templatesResult.data ?? [];
+  const categories: Category[] = categoriesResult.data ?? [];
+
   return (
     <main>
       <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        {/* Page header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Transactions
+            Recurring Transactions
           </h1>
           <p className="mt-1 text-slate-600">
-            View and manage all your income and expenses.
+            Automate your recurring income and expenses. Transactions are
+            generated automatically based on your schedules.
           </p>
         </div>
 
-        <TransactionsClient
-          initialTransactions={(transactionsResult.data as TransactionWithCategory[]) ?? []}
-          categories={(categoriesResult.data as Category[]) ?? []}
+        <RecurringTemplatesClient
+          initialTemplates={templates}
+          categories={categories}
+          userId={user.id}
           customPaymentMethods={(customPmResult.data as CustomPaymentMethod[]) ?? []}
         />
       </div>

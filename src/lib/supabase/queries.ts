@@ -7,6 +7,12 @@ import type {
   Budget,
   BudgetWithCategory,
   SavingsGoal,
+  RecurringTemplate,
+  RecurringTemplateWithCategory,
+  RecurringFrequency,
+  CustomPaymentMethod,
+  PaymentMethod,
+  PaymentMethodBudget,
 } from "@/lib/types/database";
 
 // ============================================================
@@ -144,7 +150,7 @@ export async function createTransaction(
 export async function updateTransaction(
   id: string,
   updates: Partial<
-    Pick<Transaction, "name" | "amount" | "type" | "date" | "notes" | "category_id">
+    Pick<Transaction, "name" | "amount" | "type" | "date" | "notes" | "category_id" | "payment_method">
   >
 ) {
   const supabase = createClient();
@@ -275,6 +281,150 @@ export async function deleteSavingsGoal(id: string) {
 }
 
 // ============================================================
+// CUSTOM PAYMENT METHODS
+// ============================================================
+
+export async function getCustomPaymentMethods(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custom_payment_methods")
+    .select("*")
+    .eq("user_id", userId)
+    .order("name");
+
+  if (error) throw error;
+  return data as CustomPaymentMethod[];
+}
+
+export async function createCustomPaymentMethod(
+  method: Omit<CustomPaymentMethod, "id" | "created_at">
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custom_payment_methods")
+    .insert(method)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as CustomPaymentMethod;
+}
+
+export async function updateCustomPaymentMethod(
+  id: string,
+  updates: Partial<Pick<CustomPaymentMethod, "name" | "icon" | "color">>
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("custom_payment_methods")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as CustomPaymentMethod;
+}
+
+export async function deleteCustomPaymentMethod(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("custom_payment_methods")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// ============================================================
+// PAYMENT METHOD BUDGETS
+// ============================================================
+
+export async function getPaymentMethodBudgets(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_method_budgets")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at");
+
+  if (error) throw error;
+  return data as PaymentMethodBudget[];
+}
+
+export async function createPaymentMethodBudget(
+  budget: Omit<PaymentMethodBudget, "id" | "created_at" | "updated_at">
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_method_budgets")
+    .insert(budget)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as PaymentMethodBudget;
+}
+
+export async function updatePaymentMethodBudget(
+  id: string,
+  updates: Partial<Pick<PaymentMethodBudget, "payment_method" | "amount" | "period" | "start_date">>
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_method_budgets")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as PaymentMethodBudget;
+}
+
+export async function deletePaymentMethodBudget(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("payment_method_budgets")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// ============================================================
+// PAYMENT METHOD ANALYTICS
+// ============================================================
+
+export async function getPaymentMethodAnalytics(userId: string) {
+  const supabase = createClient();
+  const { data: transactions, error } = await supabase
+    .from("transactions")
+    .select("payment_method, amount, type, date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false });
+
+  if (error) throw error;
+
+  // Group by payment_method
+  const map = new Map<string, { income: number; expense: number; count: number; dates: string[] }>();
+  for (const tx of transactions ?? []) {
+    const pm = tx.payment_method as string;
+    if (!map.has(pm)) map.set(pm, { income: 0, expense: 0, count: 0, dates: [] });
+    const entry = map.get(pm)!;
+    entry.count++;
+    entry.dates.push(tx.date);
+    if (tx.type === "income") entry.income += Number(tx.amount);
+    else entry.expense += Number(tx.amount);
+  }
+
+  return Array.from(map.entries()).map(([method, data]) => ({
+    method: method as PaymentMethod,
+    ...data,
+    total: data.income + data.expense,
+    lastUsed: data.dates[0] ?? null,
+  }));
+}
+
+// ============================================================
 // DASHBOARD SUMMARY
 // ============================================================
 
@@ -354,4 +504,148 @@ export async function getMonthlyTotals(userId: string, months = 6) {
     month,
     ...values,
   }));
+}
+
+// ============================================================
+// RECURRING TEMPLATES
+// ============================================================
+
+/**
+ * Calculate the next occurrence date based on frequency.
+ */
+export function getNextOccurrence(
+  fromDate: string,
+  frequency: RecurringFrequency
+): string {
+  const d = new Date(fromDate);
+  switch (frequency) {
+    case "daily":
+      d.setDate(d.getDate() + 1);
+      break;
+    case "weekly":
+      d.setDate(d.getDate() + 7);
+      break;
+    case "monthly":
+      d.setMonth(d.getMonth() + 1);
+      break;
+    case "yearly":
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+export async function getRecurringTemplates(userId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("recurring_templates")
+    .select("*, categories(name, icon, color)")
+    .eq("user_id", userId)
+    .order("next_date");
+
+  if (error) throw error;
+  return data as RecurringTemplateWithCategory[];
+}
+
+export async function createRecurringTemplate(
+  template: Omit<RecurringTemplate, "id" | "created_at" | "updated_at" | "next_date" | "is_active">
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("recurring_templates")
+    .insert({
+      ...template,
+      next_date: template.start_date,
+      is_active: true,
+    })
+    .select("*, categories(name, icon, color)")
+    .single();
+
+  if (error) throw error;
+  return data as RecurringTemplateWithCategory;
+}
+
+export async function updateRecurringTemplate(
+  id: string,
+  updates: Partial<Pick<RecurringTemplate, "name" | "amount" | "type" | "category_id" | "payment_method" | "frequency" | "start_date" | "end_date" | "notes" | "is_active">>
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("recurring_templates")
+    .update(updates)
+    .eq("id", id)
+    .select("*, categories(name, icon, color)")
+    .single();
+
+  if (error) throw error;
+  return data as RecurringTemplateWithCategory;
+}
+
+export async function deleteRecurringTemplate(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("recurring_templates")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/**
+ * Generate transactions from recurring templates whose next_date <= today.
+ * Returns the number of transactions created.
+ */
+export async function generateRecurringTransactions(userId: string) {
+  const supabase = createClient();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Find all active templates due for generation
+  const { data: templates, error: fetchError } = await supabase
+    .from("recurring_templates")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .lte("next_date", today);
+
+  if (fetchError) throw fetchError;
+  if (!templates || templates.length === 0) return 0;
+
+  let count = 0;
+
+  for (const template of templates) {
+    // Skip if past end_date
+    if (template.end_date && template.next_date > template.end_date) {
+      // Deactivate expired template
+      await supabase
+        .from("recurring_templates")
+        .update({ is_active: false })
+        .eq("id", template.id);
+      continue;
+    }
+
+    // Create the transaction
+    const { error: insertError } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        category_id: template.category_id,
+        name: template.name,
+        amount: template.amount,
+        type: template.type,
+        payment_method: template.payment_method,
+        date: template.next_date,
+        notes: template.notes,
+      });
+
+    if (insertError) continue;
+    count++;
+
+    // Advance next_date
+    const newNextDate = getNextOccurrence(template.next_date, template.frequency);
+    await supabase
+      .from("recurring_templates")
+      .update({ next_date: newNextDate })
+      .eq("id", template.id);
+  }
+
+  return count;
 }

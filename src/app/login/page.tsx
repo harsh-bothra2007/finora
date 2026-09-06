@@ -2,28 +2,34 @@
 
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type LoginStatus = "idle" | "loading" | "error" | "rate-limited" | "unverified";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<LoginStatus>("idle");
+  const [message, setMessage] = useState(() =>
+    searchParams.get("error") === "auth_callback_error"
+      ? "Something went wrong during verification. Please try logging in again."
+      : ""
+  );
+  const [status, setStatus] = useState<LoginStatus>(() =>
+    searchParams.get("error") === "auth_callback_error" ? "error" : "idle"
+  );
   const [resendCooldown, setResendCooldown] = useState(0);
-
-  useEffect(() => {
-    const error = searchParams.get("error");
-    if (error === "auth_callback_error") {
-      setStatus("error");
-      setMessage("Something went wrong during verification. Please try logging in again.");
-    }
-  }, [searchParams]);
 
   function startResendCooldown() {
     setResendCooldown(60);
@@ -153,12 +159,20 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Password
-              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"

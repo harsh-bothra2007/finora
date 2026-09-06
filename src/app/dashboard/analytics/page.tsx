@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import TransactionsClient from "@/components/TransactionsClient";
+import AnalyticsClient from "@/components/AnalyticsClient";
 import type { TransactionWithCategory, Category, CustomPaymentMethod } from "@/lib/types/database";
 
-export default async function TransactionsPage() {
+export default async function AnalyticsPage() {
   const supabase = await createClient();
 
   const {
@@ -14,13 +14,20 @@ export default async function TransactionsPage() {
     redirect("/login");
   }
 
+  // Fetch all transactions (last 2 years for robust analytics) and categories
+  const twoYearsAgo = new Date(
+    new Date().setFullYear(new Date().getFullYear() - 2)
+  )
+    .toISOString()
+    .slice(0, 10);
+
   const [transactionsResult, categoriesResult, customPmResult] = await Promise.all([
     supabase
       .from("transactions")
       .select("*, categories(name, icon, color)")
       .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(200),
+      .gte("date", twoYearsAgo)
+      .order("date", { ascending: false }),
     supabase
       .from("categories")
       .select("*")
@@ -33,21 +40,27 @@ export default async function TransactionsPage() {
       .order("name"),
   ]);
 
+  const transactions: TransactionWithCategory[] =
+    (transactionsResult.data as TransactionWithCategory[]) ?? [];
+  const categories: Category[] = (categoriesResult.data as Category[]) ?? [];
+
   return (
     <main>
       <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        {/* Page header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Transactions
+            Analytics
           </h1>
           <p className="mt-1 text-slate-600">
-            View and manage all your income and expenses.
+            Deep dive into your financial data. Analyze spending patterns, track
+            trends, and compare periods.
           </p>
         </div>
 
-        <TransactionsClient
-          initialTransactions={(transactionsResult.data as TransactionWithCategory[]) ?? []}
-          categories={(categoriesResult.data as Category[]) ?? []}
+        <AnalyticsClient
+          transactions={transactions}
+          categories={categories}
           customPaymentMethods={(customPmResult.data as CustomPaymentMethod[]) ?? []}
         />
       </div>

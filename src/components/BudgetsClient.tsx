@@ -18,7 +18,7 @@ export default function BudgetsClient({
   userId,
 }: BudgetsClientProps) {
   const [budgets, setBudgets] = useState(initialBudgets);
-  const [spent, setSpent] = useState(initialSpent);
+  const [spent] = useState(initialSpent);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState("");

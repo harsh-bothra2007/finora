@@ -43,8 +43,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from login/register to dashboard
-  if (user && (pathname === "/login" || pathname === "/register")) {
+  // Redirect logged-in users away from auth pages to dashboard
+  if (user && (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

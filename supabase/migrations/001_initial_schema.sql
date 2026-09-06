@@ -111,6 +111,33 @@ create index idx_savings_goals_user
   on public.savings_goals (user_id);
 
 
+-- 6. RECURRING TEMPLATES — recurring income/expense schedules
+-- ============================================================
+create table public.recurring_templates (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references auth.users(id) on delete cascade,
+  category_id     uuid references public.categories(id) on delete set null,
+  name            text not null,
+  amount          numeric(12, 2) not null check (amount > 0),
+  type            text not null check (type in ('income', 'expense')),
+  payment_method  text not null default 'other' check (payment_method in ('upi', 'cash', 'card', 'bank_transfer', 'other')),
+  frequency       text not null check (frequency in ('daily', 'weekly', 'monthly', 'yearly')),
+  start_date      date not null default current_date,
+  end_date        date,
+  next_date       date not null default current_date,
+  notes           text not null default '',
+  is_active       boolean not null default true,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index idx_recurring_templates_user
+  on public.recurring_templates (user_id);
+
+create index idx_recurring_templates_next_date
+  on public.recurring_templates (next_date) where is_active = true;
+
+
 -- ============================================================
 -- UPDATED_AT TRIGGER — auto-update on row change
 -- ============================================================
@@ -140,15 +167,20 @@ create trigger set_updated_at_savings_goals
   before update on public.savings_goals
   for each row execute function public.update_updated_at();
 
+create trigger set_updated_at_recurring_templates
+  before update on public.recurring_templates
+  for each row execute function public.update_updated_at();
+
 
 -- ============================================================
 -- ROW LEVEL SECURITY — users can only see their own data
 -- ============================================================
-alter table public.profiles       enable row level security;
-alter table public.categories     enable row level security;
-alter table public.transactions   enable row level security;
-alter table public.budgets        enable row level security;
-alter table public.savings_goals  enable row level security;
+alter table public.profiles              enable row level security;
+alter table public.categories            enable row level security;
+alter table public.transactions          enable row level security;
+alter table public.budgets               enable row level security;
+alter table public.savings_goals         enable row level security;
+alter table public.recurring_templates   enable row level security;
 
 -- Profiles: users can read/update their own
 create policy "Users can view own profile"
@@ -225,4 +257,21 @@ create policy "Users can update own savings goals"
 
 create policy "Users can delete own savings goals"
   on public.savings_goals for delete
+  using (auth.uid() = user_id);
+
+-- Recurring Templates: full CRUD for own data
+create policy "Users can view own recurring templates"
+  on public.recurring_templates for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own recurring templates"
+  on public.recurring_templates for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own recurring templates"
+  on public.recurring_templates for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own recurring templates"
+  on public.recurring_templates for delete
   using (auth.uid() = user_id);
