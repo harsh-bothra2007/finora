@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getBudgetPeriodWindow } from "@/lib/supabase/queries";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import DashboardClient from "@/components/DashboardClient";
 import MonthlyChart from "@/components/MonthlyChart";
@@ -26,7 +27,10 @@ export default async function DashboardPage() {
   }
 
   const userName =
-    user.user_metadata?.name || user.email?.split("@")[0] || "there";
+    user.user_metadata?.username ||
+    user.user_metadata?.name ||
+    user.email?.split("@")[0] ||
+    "there";
 
   // Fetch all data in parallel using the SERVER client
   const now = new Date();
@@ -43,6 +47,7 @@ export default async function DashboardPage() {
     monthlyResult,
     savingsResult,
     customPmResult,
+    budgetExpensesResult,
   ] = await Promise.all([
     // Recent transactions
     supabase
@@ -95,6 +100,14 @@ export default async function DashboardPage() {
       .select("*")
       .eq("user_id", user.id)
       .order("name"),
+
+    // All expenses (with dates) so budget progress can be limited to each
+    // budget's current weekly/monthly/yearly period
+    supabase
+      .from("transactions")
+      .select("category_id, amount, date")
+      .eq("user_id", user.id)
+      .eq("type", "expense"),
   ]);
 
   // ── Safely extract data ──
@@ -182,12 +195,25 @@ export default async function DashboardPage() {
   );
 
   // ── Budget progress ──
+  // Count only expenses inside each budget's current period (anchored at
+  // start_date), so weekly/monthly/yearly budgets don't accumulate all-time spend
   const spentByCategory = new Map<string, number>();
-  for (const tx of transactions) {
-    if (tx.type === "expense" && tx.category_id) {
-      const current = spentByCategory.get(tx.category_id) ?? 0;
-      spentByCategory.set(tx.category_id, current + tx.amount);
+  for (const budget of budgets) {
+    const { start, end } = getBudgetPeriodWindow(
+      budget.start_date,
+      budget.period
+    );
+    let spent = 0;
+    for (const tx of budgetExpensesResult.data ?? []) {
+      if (
+        tx.category_id === budget.category_id &&
+        tx.date >= start &&
+        tx.date <= end
+      ) {
+        spent += Number(tx.amount);
+      }
     }
+    spentByCategory.set(budget.category_id, spent);
   }
 
   return (

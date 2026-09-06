@@ -507,6 +507,82 @@ export async function getMonthlyTotals(userId: string, months = 6) {
 }
 
 // ============================================================
+// BUDGET PERIOD WINDOWS
+// ============================================================
+
+export type BudgetPeriod = "weekly" | "monthly" | "yearly";
+
+export interface BudgetPeriodWindow {
+  /** Inclusive start date (YYYY-MM-DD) of the current period */
+  start: string;
+  /** Inclusive end date (YYYY-MM-DD) of the current period */
+  end: string;
+}
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Advance a YYYY-MM-DD date by one budget period (exclusive end of the
+ * previous window). Uses UTC date math so day boundaries never drift.
+ */
+function addPeriodUtc(dateStr: string, period: BudgetPeriod): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  let next: number;
+  switch (period) {
+    case "weekly":
+      next = Date.UTC(y, m - 1, d) + 7 * 24 * 60 * 60 * 1000;
+      break;
+    case "monthly":
+      // JS normalizes overflow (e.g. Jan 31 + 1 month -> Mar 2/3), keeping windows contiguous
+      next = Date.UTC(y, m, d);
+      break;
+    case "yearly":
+      next = Date.UTC(y + 1, m - 1, d);
+      break;
+  }
+  return new Date(next).toISOString().slice(0, 10);
+}
+
+/**
+ * Compute the current period window for a budget, anchored at its
+ * start_date. E.g. a monthly budget starting 2026-01-15 covers
+ * 01-15..02-14, 02-15..03-14, and so on; this returns the window that
+ * contains today. Budget progress should only count expenses whose date
+ * falls inside this window.
+ */
+export function getBudgetPeriodWindow(
+  startDate: string,
+  period: BudgetPeriod,
+  now: Date = new Date()
+): BudgetPeriodWindow {
+  const today = toISODate(now);
+  let start = startDate;
+  let end = addPeriodUtc(start, period); // exclusive end
+
+  // Advance windows until today falls inside [start, end)
+  let guard = 0;
+  while (end <= today && guard < 2000) {
+    start = end;
+    end = addPeriodUtc(start, period);
+    guard++;
+  }
+
+  // Convert the exclusive end to an inclusive end date
+  const endInclusive = new Date(
+    new Date(end + "T00:00:00Z").getTime() - 24 * 60 * 60 * 1000
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  return { start, end: endInclusive };
+}
+
+// ============================================================
 // RECURRING TEMPLATES
 // ============================================================
 

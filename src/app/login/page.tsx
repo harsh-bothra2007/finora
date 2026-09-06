@@ -4,8 +4,37 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  DEMO_USERNAME,
+  demoModeEnabled,
+  seedDemoData,
+} from "@/lib/demo";
 
 type LoginStatus = "idle" | "loading" | "error" | "rate-limited" | "unverified";
+
+const NETWORK_ERROR_MESSAGE =
+  "Can't reach the server right now. Check your internet connection and try again.";
+
+function isNetworkError(err: unknown): boolean {
+  const raw =
+    err && typeof err === "object" && "message" in err
+      ? (err as { message: unknown }).message
+      : err instanceof Error
+        ? err.message
+        : err ?? "";
+  const msg = String(raw).toLowerCase();
+  return (
+    msg.includes("fetch failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("load failed") ||
+    msg.includes("enotfound") ||
+    msg.includes("unable to connect") ||
+    msg.includes("socket")
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -19,7 +48,8 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(() =>
     searchParams.get("error") === "auth_callback_error"
@@ -30,6 +60,97 @@ function LoginForm() {
     searchParams.get("error") === "auth_callback_error" ? "error" : "idle"
   );
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState("");
+
+  async function handleDemoLogin() {
+    setDemoLoading(true);
+    setDemoError("");
+    try {
+      // Ensure the demo user exists server-side (only works when
+      // SUPABASE_SERVICE_ROLE_KEY is configured — harmless otherwise).
+      const res = await fetch("/api/demo/login", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        throw new Error(
+          json.error ?? "Demo login failed. Please try again later."
+        );
+      }
+
+      const supabase = createClient();
+
+      // Try signing in — this works when the admin already created the user
+      const { error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
+        });
+
+      if (!signInError) {
+        router.push("/dashboard");
+        return;
+      }
+
+      // If the admin had the service role key, sign-in should have worked.
+      // Surface the real error instead of silently falling through.
+      if (json.adminSetup) {
+        throw new Error(
+          signInError.message.includes("Email not confirmed")
+            ? "The demo account email is not confirmed. Please confirm it in your Supabase dashboard or disable email confirmation."
+            : signInError.message
+        );
+      }
+
+      // No SERVICE_ROLE_KEY — try creating the demo user client-side.
+      // This only works when the project doesn't require email confirmation
+      // (common in development).
+      if (
+        signInError.message.includes("Invalid login") ||
+        signInError.message.includes("Email not confirmed")
+      ) {
+        const { data: signUpData, error: signUpError } =
+          await supabase.auth.signUp({
+            email: DEMO_EMAIL,
+            password: DEMO_PASSWORD,
+            options: {
+              data: { name: "Demo User", username: DEMO_USERNAME },
+            },
+          });
+
+        if (signUpError) {
+          if (signUpError.message.toLowerCase().includes("already registered")) {
+            throw new Error(
+              "The demo account needs one-time setup: configure SUPABASE_SERVICE_ROLE_KEY, or disable email confirmation in your Supabase project."
+            );
+          }
+          throw signUpError;
+        }
+
+        if (!signUpData.session || !signUpData.user) {
+          throw new Error(
+            "The demo account needs one-time setup: configure SUPABASE_SERVICE_ROLE_KEY, or disable email confirmation in your Supabase project."
+          );
+        }
+
+        // Just created the account — seed sample data. RLS lets the
+        // signed-in demo user insert their own rows.
+        await seedDemoData(supabase, signUpData.user.id);
+        router.push("/dashboard");
+        return;
+      }
+
+      throw signInError;
+    } catch (err) {
+      setDemoError(
+        isNetworkError(err)
+          ? NETWORK_ERROR_MESSAGE
+          : err instanceof Error
+            ? err.message
+            : "Something went wrong."
+      );
+      setDemoLoading(false);
+    }
+  }
 
   function startResendCooldown() {
     setResendCooldown(60);
@@ -51,6 +172,24 @@ function LoginForm() {
     setMessage("");
 
     const supabase = createClient();
+
+    // Resolve the username to its account email, then sign in with it
+    const { data: email, error: resolveError } = await supabase.rpc(
+      "get_email_by_username",
+      { p_username: username.trim() }
+    );
+
+    if (resolveError || !email) {
+      setStatus("error");
+      setMessage(
+        isNetworkError(resolveError)
+          ? NETWORK_ERROR_MESSAGE
+          : "Invalid username or password. Please try again."
+      );
+      return;
+    }
+    setAccountEmail(email);
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -77,7 +216,10 @@ function LoginForm() {
         startResendCooldown();
       } else if (error.message.includes("Invalid login")) {
         setStatus("error");
-        setMessage("Invalid email or password. Please try again.");
+        setMessage("Invalid username or password. Please try again.");
+      } else if (isNetworkError(error)) {
+        setStatus("error");
+        setMessage(NETWORK_ERROR_MESSAGE);
       } else {
         setStatus("error");
         setMessage(error.message);
@@ -92,10 +234,16 @@ function LoginForm() {
     setStatus("loading");
     setMessage("");
 
+    if (!accountEmail) {
+      setStatus("error");
+      setMessage("Please try logging in once before resending the email.");
+      return;
+    }
+
     const supabase = createClient();
     const { error } = await supabase.auth.resend({
       type: "signup",
-      email,
+      email: accountEmail,
     });
 
     if (error) {
@@ -108,6 +256,9 @@ function LoginForm() {
         setMessage(
           "Too many requests. Please wait a minute before trying again."
         );
+      } else if (isNetworkError(error)) {
+        setStatus("error");
+        setMessage(NETWORK_ERROR_MESSAGE);
       } else {
         setStatus("error");
         setMessage(error.message);
@@ -142,18 +293,19 @@ function LoginForm() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
-                Email
+                Username
               </label>
               <input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="your_username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
+                autoComplete="username"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
               />
             </div>
@@ -223,6 +375,37 @@ function LoginForm() {
               {status === "loading" ? "Logging in..." : "Login"}
             </button>
           </form>
+
+          {/* DEMO-ONLY: remove this block (and the handleDemoLogin handler
+              above) to disable the demo account feature */}
+          {demoModeEnabled && (
+            <>
+              <div className="my-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs text-slate-400">or</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                disabled={demoLoading}
+                className="w-full rounded-lg border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {demoLoading ? "Logging in..." : "🚀 Try Demo Dashboard"}
+              </button>
+
+              <p className="mt-2 text-center text-xs text-slate-400">
+                One-click demo account with sample data — no signup needed.
+              </p>
+
+              {demoError && (
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {demoError}
+                </div>
+              )}
+            </>
+          )}
 
           <p className="mt-6 text-center text-sm text-slate-600">
             Don&apos;t have an account?{" "}

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getBudgetPeriodWindow } from "@/lib/supabase/queries";
 import PaymentMethodsClient from "@/components/PaymentMethodsClient";
 import type {
   CustomPaymentMethod,
@@ -44,12 +45,27 @@ export default async function PaymentMethodsPage() {
     (budgetsResult.data as PaymentMethodBudget[]) ?? [];
   const transactions = transactionsResult.data ?? [];
 
-  // Total spent (expenses) per payment method for budget progress
+  // Total spent (expenses) per payment method for budget progress — only
+  // expenses inside each budget's current weekly/monthly/yearly period
+  // (anchored at start_date)
   const spentByMethod: Record<string, number> = {};
-  for (const tx of transactions) {
-    if (tx.type !== "expense") continue;
-    const pm = tx.payment_method as string;
-    spentByMethod[pm] = (spentByMethod[pm] ?? 0) + Number(tx.amount);
+  for (const budget of budgets) {
+    const { start, end } = getBudgetPeriodWindow(
+      budget.start_date,
+      budget.period
+    );
+    let spent = 0;
+    for (const tx of transactions) {
+      if (tx.type !== "expense") continue;
+      if (
+        tx.payment_method === budget.payment_method &&
+        tx.date >= start &&
+        tx.date <= end
+      ) {
+        spent += Number(tx.amount);
+      }
+    }
+    spentByMethod[budget.payment_method] = spent;
   }
 
   // Compute payment method analytics

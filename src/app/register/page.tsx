@@ -13,10 +13,32 @@ type RegisterStatus =
   | "rate-limited"
   | "error";
 
+const NETWORK_ERROR_MESSAGE =
+  "Can't reach the server right now. Check your internet connection and try again.";
+
+function isNetworkError(err: unknown): boolean {
+  const raw =
+    err && typeof err === "object" && "message" in err
+      ? (err as { message: unknown }).message
+      : err instanceof Error
+        ? err.message
+        : err ?? "";
+  const msg = String(raw).toLowerCase();
+  return (
+    msg.includes("fetch failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("load failed") ||
+    msg.includes("enotfound") ||
+    msg.includes("unable to connect") ||
+    msg.includes("socket")
+  );
+}
+
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
@@ -40,6 +62,20 @@ export default function RegisterPage() {
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
+    const normalizedUsername = username.trim();
+    if (normalizedUsername.length < 3) {
+      setStatus("error");
+      setMessage("Username must be at least 3 characters long.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(normalizedUsername)) {
+      setStatus("error");
+      setMessage(
+        "Username can only contain letters, numbers, underscores, dots and hyphens."
+      );
+      return;
+    }
+
     setStatus("loading");
     setMessage("");
 
@@ -49,7 +85,8 @@ export default function RegisterPage() {
       password,
       options: {
         data: {
-          name,
+          name: normalizedUsername,
+          username: normalizedUsername,
           role,
         },
       },
@@ -71,6 +108,17 @@ export default function RegisterPage() {
         setMessage(
           "An account with this email already exists. Try logging in instead."
         );
+      } else if (
+        error.message.includes("duplicate key") ||
+        error.message.toLowerCase().includes("username")
+      ) {
+        setStatus("error");
+        setMessage(
+          "That username is already taken. Try another one."
+        );
+      } else if (isNetworkError(error)) {
+        setStatus("error");
+        setMessage(NETWORK_ERROR_MESSAGE);
       } else {
         setStatus("error");
         setMessage(error.message);
@@ -113,6 +161,9 @@ export default function RegisterPage() {
         setMessage(
           "Too many requests. Please wait a minute before trying again."
         );
+      } else if (isNetworkError(error)) {
+        setStatus("error");
+        setMessage(NETWORK_ERROR_MESSAGE);
       } else {
         setStatus("error");
         setMessage(error.message);
@@ -229,20 +280,26 @@ export default function RegisterPage() {
             <form onSubmit={handleRegister} className="space-y-5">
               <div>
                 <label
-                  htmlFor="name"
+                  htmlFor="username"
                   className="mb-2 block text-sm font-medium text-slate-700"
                 >
-                  Full name
+                  Username
                 </label>
                 <input
-                  id="name"
+                  id="username"
                   type="text"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Choose a username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   required
+                  minLength={3}
+                  autoComplete="username"
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
                 />
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Letters, numbers, underscores, dots and hyphens. This is what
+                  you&apos;ll use to log in.
+                </p>
               </div>
 
               <div>
