@@ -4,13 +4,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  DEMO_EMAIL,
-  DEMO_PASSWORD,
-  DEMO_USERNAME,
-  demoModeEnabled,
-  seedDemoData,
-} from "@/lib/demo";
 
 type LoginStatus = "idle" | "loading" | "error" | "rate-limited" | "unverified";
 
@@ -49,7 +42,6 @@ function LoginForm() {
   const searchParams = useSearchParams();
 
   const [username, setUsername] = useState("");
-  const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(() =>
     searchParams.get("error") === "auth_callback_error"
@@ -60,106 +52,13 @@ function LoginForm() {
     searchParams.get("error") === "auth_callback_error" ? "error" : "idle"
   );
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoError, setDemoError] = useState("");
-
-  async function handleDemoLogin() {
-    setDemoLoading(true);
-    setDemoError("");
-    try {
-      // Ensure the demo user exists server-side (only works when
-      // SUPABASE_SERVICE_ROLE_KEY is configured — harmless otherwise).
-      const res = await fetch("/api/demo/login", { method: "POST" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.ok) {
-        throw new Error(
-          json.error ?? "Demo login failed. Please try again later."
-        );
-      }
-
-      const supabase = createClient();
-
-      // Try signing in — this works when the admin already created the user
-      const { error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: DEMO_EMAIL,
-          password: DEMO_PASSWORD,
-        });
-
-      if (!signInError) {
-        router.push("/dashboard");
-        return;
-      }
-
-      // If the admin had the service role key, sign-in should have worked.
-      // Surface the real error instead of silently falling through.
-      if (json.adminSetup) {
-        throw new Error(
-          signInError.message.includes("Email not confirmed")
-            ? "The demo account email is not confirmed. Please confirm it in your Supabase dashboard or disable email confirmation."
-            : signInError.message
-        );
-      }
-
-      // No SERVICE_ROLE_KEY — try creating the demo user client-side.
-      // This only works when the project doesn't require email confirmation
-      // (common in development).
-      if (
-        signInError.message.includes("Invalid login") ||
-        signInError.message.includes("Email not confirmed")
-      ) {
-        const { data: signUpData, error: signUpError } =
-          await supabase.auth.signUp({
-            email: DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-            options: {
-              data: { name: "Demo User", username: DEMO_USERNAME },
-            },
-          });
-
-        if (signUpError) {
-          if (signUpError.message.toLowerCase().includes("already registered")) {
-            throw new Error(
-              "The demo account needs one-time setup: configure SUPABASE_SERVICE_ROLE_KEY, or disable email confirmation in your Supabase project."
-            );
-          }
-          throw signUpError;
-        }
-
-        if (!signUpData.session || !signUpData.user) {
-          throw new Error(
-            "The demo account needs one-time setup: configure SUPABASE_SERVICE_ROLE_KEY, or disable email confirmation in your Supabase project."
-          );
-        }
-
-        // Just created the account — seed sample data. RLS lets the
-        // signed-in demo user insert their own rows.
-        await seedDemoData(supabase, signUpData.user.id);
-        router.push("/dashboard");
-        return;
-      }
-
-      throw signInError;
-    } catch (err) {
-      setDemoError(
-        isNetworkError(err)
-          ? NETWORK_ERROR_MESSAGE
-          : err instanceof Error
-            ? err.message
-            : "Something went wrong."
-      );
-      setDemoLoading(false);
-    }
-  }
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   function startResendCooldown() {
     setResendCooldown(60);
     const interval = setInterval(() => {
       setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(interval); return 0; }
         return prev - 1;
       });
     }, 1000);
@@ -167,52 +66,43 @@ function LoginForm() {
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
     setStatus("loading");
     setMessage("");
 
     const supabase = createClient();
 
-    // Resolve the username to its account email, then sign in with it
-    const { data: email, error: resolveError } = await supabase.rpc(
-      "get_email_by_username",
-      { p_username: username.trim() }
-    );
+    // Try username + password if a username was entered; fall back to
+    // email address directly (works without migration 004).
+    const trimmed = username.trim();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 
-    if (resolveError || !email) {
-      setStatus("error");
-      setMessage(
-        isNetworkError(resolveError)
-          ? NETWORK_ERROR_MESSAGE
-          : "Invalid username or password. Please try again."
+    let email = trimmed;
+    if (!isEmail) {
+      const { data: resolvedEmail, error: resolveError } = await supabase.rpc(
+        "get_email_by_username",
+        { p_username: trimmed }
       );
-      return;
+      if (resolveError || !resolvedEmail) {
+        setStatus("error");
+        setMessage(
+          isNetworkError(resolveError)
+            ? NETWORK_ERROR_MESSAGE
+            : "Invalid username or password. Please try again."
+        );
+        return;
+      }
+      email = resolvedEmail;
     }
-    setAccountEmail(email);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      if (
-        error.status === 429 ||
-        error.message.includes("rate limit") ||
-        error.message.includes("too many")
-      ) {
+      if (error.status === 429 || error.message.includes("rate limit") || error.message.includes("too many")) {
         setStatus("rate-limited");
-        setMessage(
-          "Too many login attempts. Please wait a minute before trying again."
-        );
-      } else if (
-        error.message.includes("Email not confirmed") ||
-        error.message.includes("email not verified")
-      ) {
+        setMessage("Too many login attempts. Please wait a minute before trying again.");
+      } else if (error.message.includes("Email not confirmed") || error.message.includes("email not verified")) {
         setStatus("unverified");
-        setMessage(
-          "Your email hasn't been verified yet. Please check your inbox or resend the verification email below."
-        );
+        setMessage("Your email hasn't been verified yet. Check your inbox or resend the verification email below.");
         startResendCooldown();
       } else if (error.message.includes("Invalid login")) {
         setStatus("error");
@@ -234,28 +124,29 @@ function LoginForm() {
     setStatus("loading");
     setMessage("");
 
-    if (!accountEmail) {
+    if (!username) {
       setStatus("error");
       setMessage("Please try logging in once before resending the email.");
       return;
     }
 
     const supabase = createClient();
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email: accountEmail,
-    });
+    const trimmed = username.trim();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    const email = isEmail ? trimmed : await resolveUsernameEmail(supabase, trimmed);
+
+    if (!email) {
+      setStatus("error");
+      setMessage("Could not find that username. Try logging in first.");
+      return;
+    }
+
+    const { error } = await supabase.auth.resend({ type: "signup", email });
 
     if (error) {
-      if (
-        error.status === 429 ||
-        error.message.includes("rate limit") ||
-        error.message.includes("too many")
-      ) {
+      if (error.status === 429 || error.message.includes("rate limit") || error.message.includes("too many")) {
         setStatus("rate-limited");
-        setMessage(
-          "Too many requests. Please wait a minute before trying again."
-        );
+        setMessage("Too many requests. Please wait a minute before trying again.");
       } else if (isNetworkError(error)) {
         setStatus("error");
         setMessage(NETWORK_ERROR_MESSAGE);
@@ -271,37 +162,84 @@ function LoginForm() {
     startResendCooldown();
   }
 
+  async function resolveUsernameEmail(supabase: ReturnType<typeof createClient>, username: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc("get_email_by_username", { p_username: username });
+    if (error || !data) return null;
+    return data;
+  }
+
+  async function handleGoogleSignIn() {
+    setGoogleLoading(true);
+    setMessage("");
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        setGoogleLoading(false);
+        setStatus("error");
+        setMessage(
+          error.message.toLowerCase().includes("provider not enabled") ||
+          error.message.toLowerCase().includes("provider")
+            ? "Google sign-in isn't enabled in your Supabase project yet. Enable it under Authentication → Sign In / Providers → Google."
+            : isNetworkError(error)
+              ? NETWORK_ERROR_MESSAGE
+              : error.message
+        );
+        return;
+      }
+
+      // signInWithOAuth returns the Google authorization URL. Navigate
+      // explicitly instead of relying on the library's internal redirect,
+      // so the "couldn't start" warning can never race with a working flow.
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      // No URL and no error — something unexpected happened.
+      setGoogleLoading(false);
+      setStatus("error");
+      setMessage("Google sign-in didn't start. Please try again.");
+    } catch (err) {
+      setGoogleLoading(false);
+      setStatus("error");
+      setMessage(
+        isNetworkError(err)
+          ? NETWORK_ERROR_MESSAGE
+          : err instanceof Error
+            ? err.message
+            : "Something went wrong."
+      );
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <Link
-            href="/"
-            className="text-2xl font-bold tracking-tight text-slate-950"
-          >
+          <Link href="/" className="text-2xl font-bold tracking-tight text-slate-950">
             Finora
           </Link>
-          <h1 className="mt-6 text-3xl font-bold text-slate-950">
-            Welcome back
-          </h1>
-          <p className="mt-2 text-slate-600">
-            Login to continue managing your finances.
-          </p>
+          <h1 className="mt-6 text-3xl font-bold text-slate-950">Welcome back</h1>
+          <p className="mt-2 text-slate-600">Login to continue managing your finances.</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label
-                htmlFor="username"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Username
+              <label htmlFor="username" className="mb-2 block text-sm font-medium text-slate-700">
+                Username or email
               </label>
               <input
                 id="username"
                 type="text"
-                placeholder="your_username"
+                placeholder="your_username or you@example.com"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -312,16 +250,10 @@ function LoginForm() {
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-slate-700"
-                >
+                <label htmlFor="password" className="text-sm font-medium text-slate-700">
                   Password
                 </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-medium text-slate-500 hover:text-slate-900"
-                >
+                <Link href="/forgot-password" className="text-xs font-medium text-slate-500 hover:text-slate-900">
                   Forgot password?
                 </Link>
               </div>
@@ -336,10 +268,7 @@ function LoginForm() {
               />
             </div>
 
-            {/* Error / rate-limit / unverified message */}
-            {(status === "error" ||
-              status === "rate-limited" ||
-              status === "unverified") && (
+            {(status === "error" || status === "rate-limited" || status === "unverified") && (
               <div
                 className={`rounded-lg px-4 py-3 text-sm ${
                   status === "rate-limited"
@@ -353,7 +282,6 @@ function LoginForm() {
               </div>
             )}
 
-            {/* Resend verification button (visible when unverified) */}
             {status === "unverified" && (
               <button
                 type="button"
@@ -361,9 +289,7 @@ function LoginForm() {
                 disabled={resendCooldown > 0}
                 className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {resendCooldown > 0
-                  ? `Resend in ${resendCooldown}s`
-                  : "Resend verification email"}
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend verification email"}
               </button>
             )}
 
@@ -376,43 +302,43 @@ function LoginForm() {
             </button>
           </form>
 
-          {/* DEMO-ONLY: remove this block (and the handleDemoLogin handler
-              above) to disable the demo account feature */}
-          {demoModeEnabled && (
-            <>
-              <div className="my-4 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" />
-                <span className="text-xs text-slate-400">or</span>
-                <div className="h-px flex-1 bg-slate-200" />
-              </div>
+          {/* Divider */}
+          <div className="my-5 flex items-center gap-3">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-xs text-slate-400">or continue with</span>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                disabled={demoLoading}
-                className="w-full rounded-lg border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {demoLoading ? "Logging in..." : "🚀 Try Demo Dashboard"}
-              </button>
-
-              <p className="mt-2 text-center text-xs text-slate-400">
-                One-click demo account with sample data — no signup needed.
-              </p>
-
-              {demoError && (
-                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                  {demoError}
-                </div>
-              )}
-            </>
-          )}
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            className="w-full rounded-lg border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.82 14.97 2 12 2 7.7 2 3.99 4.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            {googleLoading ? "Signing in..." : "Sign in with Google"}
+          </button>
 
           <p className="mt-6 text-center text-sm text-slate-600">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-semibold text-slate-900 hover:underline"
-            >
+            <Link href="/register" className="font-semibold text-slate-900 hover:underline">
               Create one
             </Link>
           </p>

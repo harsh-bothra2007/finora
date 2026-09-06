@@ -6,28 +6,35 @@ interface SavingsOverviewProps {
   goals: SavingsGoal[];
 }
 
-export default function SavingsOverview({ goals }: SavingsOverviewProps) {
-  const totalSaved = goals.reduce((sum, g) => sum + g.current_amount, 0);
-  const totalTarget = goals.reduce((sum, g) => sum + g.target_amount, 0);
-  const overallPercentage =
-    totalTarget > 0 ? Math.min(Math.round((totalSaved / totalTarget) * 100), 100) : 0;
+function inr(n: number): string {
+  return `₹${Math.round(n).toLocaleString("en-IN")}`;
+}
 
+function formatTarget(date: string | null) {
+  if (!date) return "No deadline";
+  const d = new Date(date + "T00:00:00");
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `Target: ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+export default function SavingsOverview({ goals }: SavingsOverviewProps) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3.5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">
-            Savings Goals
-          </h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {goals.length} goal{goals.length !== 1 ? "s" : ""} active
+          <h3 className="text-sm font-semibold text-slate-900">Savings Goals</h3>
+          <p className="text-xs text-slate-400">
+            {goals.length} active target{goals.length === 1 ? "" : "s"}
           </p>
         </div>
         <a
           href="/dashboard/savings"
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+          className="text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline"
         >
-          Manage →
+          + New Goal
         </a>
       </div>
 
@@ -38,63 +45,52 @@ export default function SavingsOverview({ goals }: SavingsOverviewProps) {
           </p>
         </div>
       ) : (
-        <>
-          {/* Overall progress */}
-          <div className="mt-5">
-            <div className="mb-2 flex justify-between text-sm">
-              <span className="text-slate-600">
-                ₹{totalSaved.toLocaleString("en-IN")} saved
-              </span>
-              <span className="text-slate-500">
-                ₹{totalTarget.toLocaleString("en-IN")}
-              </span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-slate-900 transition-all duration-500"
-                style={{ width: `${overallPercentage}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-right text-xs text-slate-400">
-              {overallPercentage}% overall
-            </p>
-          </div>
-
-          {/* Individual goals */}
-          <div className="mt-5 space-y-3">
-            {goals.slice(0, 3).map((goal) => {
-              const pct = Math.min(
-                Math.round((goal.current_amount / goal.target_amount) * 100),
-                100
-              );
-              return (
-                <div key={goal.id}>
-                  <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="font-medium text-slate-700">
-                      {goal.name}
-                    </span>
-                    <span className="text-slate-500">
-                      {pct}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        pct >= 100 ? "bg-emerald-500" : "bg-slate-600"
-                      }`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+        goals.slice(0, 3).map((goal) => {
+          const pct = Math.min(
+            Math.round((goal.current_amount / goal.target_amount) * 100),
+            100
+          );
+          return (
+            <div key={goal.id} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+              <div className="mb-1.5 flex items-center justify-between">
+                <div>
+                  <span className="block text-xs font-semibold leading-tight text-slate-900">
+                    {goal.icon} {goal.name}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {formatTarget(goal.deadline)}
+                  </span>
                 </div>
-              );
-            })}
-            {goals.length > 3 && (
-              <p className="text-center text-xs text-slate-400">
-                +{goals.length - 3} more goal{goals.length - 3 !== 1 ? "s" : ""}
-              </p>
-            )}
-          </div>
-        </>
+                <span
+                  className={`font-mono text-xs font-semibold ${
+                    pct >= 100 ? "text-emerald-600" : "text-brand-600"
+                  }`}
+                >
+                  {pct}%
+                </span>
+              </div>
+              <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/80">
+                <div
+                  className={`h-full rounded-full ${
+                    pct >= 100 ? "bg-emerald-500" : "bg-brand-600"
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-mono text-slate-500">
+                  {inr(goal.current_amount)} / {inr(goal.target_amount)}
+                </span>
+                <a
+                  href="/dashboard/savings"
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  + Add Funds
+                </a>
+              </div>
+            </div>
+          );
+        })
       )}
     </div>
   );

@@ -5,13 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type RegisterStatus =
-  | "idle"
-  | "loading"
-  | "success"
-  | "email-confirmed"
-  | "rate-limited"
-  | "error";
+type RegisterStatus = "idle" | "loading" | "success" | "email-confirmed" | "rate-limited" | "error";
 
 const NETWORK_ERROR_MESSAGE =
   "Can't reach the server right now. Check your internet connection and try again.";
@@ -41,7 +35,6 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<RegisterStatus>("idle");
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -50,10 +43,7 @@ export default function RegisterPage() {
     setResendCooldown(60);
     const interval = setInterval(() => {
       setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(interval); return 0; }
         return prev - 1;
       });
     }, 1000);
@@ -87,35 +77,27 @@ export default function RegisterPage() {
         data: {
           name: normalizedUsername,
           username: normalizedUsername,
-          role,
         },
       },
     });
 
     if (error) {
-      // Handle rate-limit errors (Supabase may return 429 as a generic error)
       if (
         error.status === 429 ||
         error.message.includes("rate limit") ||
         error.message.includes("too many")
       ) {
         setStatus("rate-limited");
-        setMessage(
-          "Too many requests. Please wait a minute before trying again."
-        );
+        setMessage("Too many requests. Please wait a minute before trying again.");
       } else if (error.message.includes("already registered")) {
         setStatus("error");
-        setMessage(
-          "An account with this email already exists. Try logging in instead."
-        );
+        setMessage("An account with this email already exists. Try logging in instead.");
       } else if (
         error.message.includes("duplicate key") ||
         error.message.toLowerCase().includes("username")
       ) {
         setStatus("error");
-        setMessage(
-          "That username is already taken. Try another one."
-        );
+        setMessage("That username is already taken. Try another one.");
       } else if (isNetworkError(error)) {
         setStatus("error");
         setMessage(NETWORK_ERROR_MESSAGE);
@@ -158,9 +140,7 @@ export default function RegisterPage() {
         error.message.includes("too many")
       ) {
         setStatus("rate-limited");
-        setMessage(
-          "Too many requests. Please wait a minute before trying again."
-        );
+        setMessage("Too many requests. Please wait a minute before trying again.");
       } else if (isNetworkError(error)) {
         setStatus("error");
         setMessage(NETWORK_ERROR_MESSAGE);
@@ -337,29 +317,6 @@ export default function RegisterPage() {
                   minLength={6}
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-900"
                 />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="role"
-                  className="mb-2 block text-sm font-medium text-slate-700"
-                >
-                  Account type
-                </label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-slate-900"
-                >
-                  <option value="" disabled>
-                    Select account type
-                  </option>
-                  <option value="student">Student</option>
-                  <option value="employee">Employee</option>
-                  <option value="employer">Employer</option>
-                </select>
               </div>
 
               {/* Error / rate-limit message */}

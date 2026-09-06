@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/reset-password`);
   }
 
-  // Handle email verification / magic link code exchange
+  // OAuth (e.g. Google) sign-in — exchange the auth code for a session
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);

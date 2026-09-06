@@ -3,13 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
+interface SidebarProps {
+  userName?: string;
+  userEmail?: string;
+}
+
+const mainNav = [
   {
     label: "Dashboard",
     href: "/dashboard",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
@@ -17,18 +22,8 @@ const navItems = [
     label: "Transactions",
     href: "/dashboard/transactions",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Categories",
-    href: "/dashboard/categories",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
@@ -36,8 +31,8 @@ const navItems = [
     label: "Budgets",
     href: "/dashboard/budgets",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
@@ -45,17 +40,29 @@ const navItems = [
     label: "Savings Goals",
     href: "/dashboard/savings",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
   {
+    label: "Categories",
+    href: "/dashboard/categories",
+    icon: (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      </svg>
+    ),
+  },
+];
+
+const manageNav = [
+  {
     label: "Payment Methods",
     href: "/dashboard/payment-methods",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
@@ -63,8 +70,8 @@ const navItems = [
     label: "Recurring",
     href: "/dashboard/recurring",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
@@ -72,58 +79,137 @@ const navItems = [
     label: "Analytics",
     href: "/dashboard/analytics",
     icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
       </svg>
     ),
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ userName, userEmail }: SidebarProps) {
   const pathname = usePathname();
 
+  function isActive(href: string) {
+    return href === "/dashboard"
+      ? pathname === "/dashboard"
+      : pathname.startsWith(href);
+  }
+
+  const name = userName ?? "User";
+  const email = userEmail ?? "";
+  const initials = name
+    .split(" ")
+    .map((p) => p.charAt(0))
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-slate-200 bg-white">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
-          <span className="text-sm font-bold text-white">F</span>
+    <aside className="flex w-64 flex-shrink-0 flex-col border-r border-slate-800/80 bg-[#0F172A] text-slate-300 select-none">
+      {/* Brand */}
+      <div className="flex h-16 items-center justify-between border-b border-slate-800/80 px-5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white shadow-sm">
+            F
+          </div>
+          <div>
+            <span className="block text-sm font-bold tracking-tight text-white">
+              Finora
+            </span>
+            <span className="-mt-0.5 block text-[10px] font-normal tracking-wide text-slate-400">
+              Financial OS
+            </span>
+          </div>
         </div>
-        <span className="text-lg font-bold text-slate-950">Finora</span>
       </div>
 
-      {/* Navigation */}
-      <nav className="mt-6 space-y-1 px-3">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+      {/* Nav */}
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+        <div>
+          <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Main Menu
+          </div>
+          <div className="space-y-0.5">
+            {mainNav.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                  }`}
+                >
+                  <span className={`h-4 w-4 ${active ? "text-brand-500" : "text-slate-400"}`}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                  {active && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                isActive
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          );
-        })}
+        <div>
+          <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Management
+          </div>
+          <div className="space-y-0.5">
+            {manageNav.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+                  }`}
+                >
+                  <span className={`h-4 w-4 ${active ? "text-brand-500" : "text-slate-400"}`}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </nav>
 
-      {/* Bottom section */}
-      <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 p-4">
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-xs font-medium text-slate-500">Quick Tip</p>
-          <p className="mt-1 text-xs text-slate-600">
-            Set budgets for each category to stay on track with your spending.
-          </p>
+      {/* Tip box */}
+      <div className="mx-3 mb-2 rounded-lg border border-slate-800 bg-slate-850/90 p-3">
+        <div className="mb-1 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="text-[11px] font-semibold text-slate-200">
+            Financial Insight
+          </span>
+        </div>
+        <p className="text-[11px] leading-relaxed text-slate-400">
+          Set budgets for each category to stay on track with your spending.
+        </p>
+      </div>
+
+      {/* User */}
+      <div className="border-t border-slate-800/80 bg-slate-950/50 p-3">
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard/settings" className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold text-white">{name}</div>
+              <div className="truncate text-[10px] text-slate-400">
+                {email || "Signed in"}
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </aside>

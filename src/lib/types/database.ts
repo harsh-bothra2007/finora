@@ -6,6 +6,7 @@
 export interface Profile {
   id: string;
   name: string;
+  username: string | null;
   role: "student" | "employee" | "employer";
   created_at: string;
   updated_at: string;
