@@ -54,12 +54,14 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Protect dashboard and other authenticated routes
-  if (!user && pathname.startsWith("/dashboard")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
+  // NOTE: Dashboard auth redirect is disabled while the UI is being built
+  // with mock data (no backend required). Re-enable this block once the
+  // pages are connected to Supabase:
+  //   if (!user && pathname.startsWith("/dashboard")) {
+  //     const url = request.nextUrl.clone();
+  //     url.pathname = "/login";
+  //     return NextResponse.redirect(url);
+  //   }
 
   // Redirect logged-in users away from auth pages to dashboard
   if (
